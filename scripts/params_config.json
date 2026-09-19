@@ -1,0 +1,32 @@
+{
+  "enabled_bucketings": ["i", "tracelen", "random", "lsh", "omh","set", "multiset"],
+  "defaults": {
+    "k": [1, 2, 3, 4],
+    "buckets_calc": ["n", "sqrt"],
+    "num_hashes": [0],
+    "omh_w": [0],
+    "omh_seed": [0],
+    "sorting": ["score", "score2", "hitcount"],
+    "bucket_limit": [0,10]
+  },
+  "bucketing": {
+    "i": {
+      "buckets_calc": ["n"]
+    },
+    "tracelen": {},
+    "set": {
+      "buckets_calc": ["n"]
+    },
+    "multiset": {
+      "buckets_calc": ["n"]
+    },
+    "random": {},
+    "lsh": {
+      "num_hashes": [100, 128]
+    },
+    "omh": {
+      "omh_w": [3, 5],
+      "omh_seed": [16745289426922663516, 2533480496015171469]
+    }
+  }
+}
