@@ -74,7 +74,7 @@ ORIGINAL_LOG_XES = LOGS_DIR / f"{log_name}.xes"
 ORIGINAL_LOG_TXT = OUTPUT_DIR / f"{log_name}.txt"
 
 # Written by calculate_fitness_baseline. Holds one AVG row per noise
-# level with the A* total cost.
+# level with the A* total cost and the A* total variant cost.
 BASELINE_CSV = OUTPUT_DIR / f"fitness_baseline_all_noise_{log_name}.csv"
 
 OUTPUT_CSV = OUTPUT_DIR / f"playout_vs_opt_alignments_{log_name}.csv"
@@ -215,12 +215,24 @@ def shortest_visible_trace(net, initial_marking, final_marking, activity_key="co
 
 # ---------------- A* baseline ----------------
 
+def parse_optional_float(value):
+    # None for missing or empty cells, e.g. when the baseline CSV was
+    # written before the total_variant_cost column existed.
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def load_astar_total_costs():
     """
-    Reads the A* total cost per noise level from the baseline CSV.
+    Reads the A* total cost and the A* total variant cost per noise
+    level from the baseline CSV.
 
-    Only the AVG rows are used, so the value is the mean over all
-    repetitions of the A* run. Returns {noise: total_cost}.
+    Only the AVG rows are used, so the values are the mean over all
+    repetitions of the A* run. Returns
+    {noise: {"total_cost": ..., "total_variant_cost": ...}}.
+    A value is None if its column is missing or empty.
     """
     costs = {}
 
@@ -236,15 +248,26 @@ def load_astar_total_costs():
             if str(row.get("repetition")).strip() != "AVG":
                 continue
 
-            try:
-                costs[float(row["noise_threshold"])] = float(row["total_cost"])
-            except (TypeError, ValueError):
+            noise = parse_optional_float(row.get("noise_threshold"))
+
+            if noise is None:
                 continue
 
+            costs[noise] = {
+                "total_cost": parse_optional_float(row.get("total_cost")),
+                "total_variant_cost": parse_optional_float(
+                    row.get("total_variant_cost")
+                ),
+            }
+
     if costs:
-        print("A* total cost per noise level (from baseline CSV):")
+        print("A* costs per noise level (from baseline CSV):")
         for noise in sorted(costs):
-            print(f"  noise={noise}: {costs[noise]}")
+            print(
+                f"  noise={noise}: "
+                f"total_cost={costs[noise]['total_cost']} "
+                f"| total_variant_cost={costs[noise]['total_variant_cost']}"
+            )
 
     return costs
 
@@ -429,6 +452,7 @@ def run_parameter_combination(
     log_length,
     ibf_params,
     astar_total_cost,
+    astar_total_variant_cost,
 ):
     # Every parameter combination inside one repetition starts from the
     # same repetition-specific seed. This makes repetitions independent
@@ -478,16 +502,28 @@ def run_parameter_combination(
     ibf_total_cost_adjusted = ibf_result[5]
     ibf_total_length_all_traces = ibf_result[6]
     ibf_number_traces = ibf_result[7]
+    ibf_total_variant_cost = ibf_result[8]
+    #ibf_mean_variant_cost = ibf_result[9]
+    ibf_number_trace_variants = ibf_result[10]
+    #variant_cost_inconsistencies = ibf_result[11]
+
 
     # Mean Alignment Error against the A* baseline.
-    # Denominator: number of trace variants of the original log,
-    # taken from the optimal alignment traces file.
-    variant_count = len(opt_traces)
+    # Both MAEs are computed independently, so one missing A* value
+    # does not blank out the other MAE.
+    # Denominator: number of trace variants of the original log
+    variant_count = ibf_number_trace_variants
 
-    if astar_total_cost is None or not variant_count:
-        mae = None
+    if astar_total_variant_cost is None or not variant_count:
+        mae_by_variant_count = None
     else:
-        mae = (float(ibf_total_cost) - float(astar_total_cost)) / variant_count
+        mae_by_variant_count = (float(ibf_total_variant_cost) - float(astar_total_variant_cost)) / variant_count
+
+    # Denominator: number of traces of the original log
+    if astar_total_cost is None or not ibf_number_traces:
+        mae_by_trace_count = None
+    else:
+        mae_by_trace_count = (float(ibf_total_cost) - float(astar_total_cost)) / ibf_number_traces
 
     return {
         "noise": noise,
@@ -508,6 +544,7 @@ def run_parameter_combination(
         "ibf_fitness": ibf_fitness,
         "ibf_total_cost": ibf_total_cost,
         "ibf_total_cost_adjusted": ibf_total_cost_adjusted,
+        "ibf_total_variant_cost": ibf_total_variant_cost,
         "ibf_total_length_all_traces": ibf_total_length_all_traces,
         "ibf_number_traces": ibf_number_traces,
         "ibf_trace_calculation_time": ibf_trace_calculation_time,
@@ -516,8 +553,10 @@ def run_parameter_combination(
         "ibf_run_time_ms": ibf_runtime,
 
         "astar_total_cost": astar_total_cost,
+        "astar_total_variant_cost": astar_total_variant_cost,
         "variant_count_for_mae": variant_count,
-        "mae": mae,
+        "mae_by_variant_count": mae_by_variant_count,
+        "mae_by_trace_count": mae_by_trace_count,
     }
 
 
@@ -534,6 +573,7 @@ def run_repetition(
     log_length,
     ibf_params,
     astar_total_cost,
+    astar_total_variant_cost,
 ):
     """
     Executes one complete repetition in one worker process.
@@ -576,6 +616,7 @@ def run_repetition(
                 log_length=log_length,
                 ibf_params=ibf_params,
                 astar_total_cost=astar_total_cost,
+                astar_total_variant_cost=astar_total_variant_cost,
             )
         )
 
@@ -588,8 +629,10 @@ def run_repetition(
 
 
 def print_result_row(row):
-    mae = row["mae"]
-    mae_text = "n/a" if mae is None else f"{mae:.4f}"
+    mae_variant = row["mae_by_variant_count"]
+    mae_trace = row["mae_by_trace_count"]
+    mae_variant_text = "n/a" if mae_variant is None else f"{mae_variant:.4f}"
+    mae_trace_text = "n/a" if mae_trace is None else f"{mae_trace:.4f}"
 
     print(
         f"{row['playout_mode']} | target={row['target_variants']} "
@@ -599,7 +642,8 @@ def print_result_row(row):
         f"| matches_to_opt_variants={row['matches_to_opt_variants']:.4f} "
         f"| matches_to_playout_size={row['matches_to_playout_size']:.4f} "
         f"| ibf_total_cost={row['ibf_total_cost']} "
-        f"| mae={mae_text}"
+        f"| mae_by_variant_count={mae_variant_text} "
+        f"| mae_by_trace_count={mae_trace_text}"
     )
 
 
@@ -628,6 +672,7 @@ def main():
         "ibf_fitness",
         "ibf_total_cost",
         "ibf_total_cost_adjusted",
+        "ibf_total_variant_cost",
         "ibf_total_length_all_traces",
         "ibf_number_traces",
         "ibf_trace_calculation_time",
@@ -636,8 +681,10 @@ def main():
         "ibf_run_time_ms",
 
         "astar_total_cost",
+        "astar_total_variant_cost",
         "variant_count_for_mae",
-        "mae",
+        "mae_by_variant_count",
+        "mae_by_trace_count",
     ]
 
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
@@ -724,12 +771,22 @@ def main():
         print(f"Max trace length: {max_trace_length}")
         print(f"Shortest visible trace: {' - '.join(shortest_trace_tuple)}")
 
-        astar_total_cost = astar_total_costs.get(float(noise))
+        astar_costs = astar_total_costs.get(float(noise), {})
+        astar_total_cost = astar_costs.get("total_cost")
+        astar_total_variant_cost = astar_costs.get("total_variant_cost")
 
         if astar_total_cost is None:
             print(
                 f"WARNING: no A* total cost for noise={noise} in the "
-                f"baseline CSV. MAE stays empty for this noise level."
+                f"baseline CSV. mae_by_trace_count stays empty for "
+                f"this noise level."
+            )
+
+        if astar_total_variant_cost is None:
+            print(
+                f"WARNING: no A* total variant cost for noise={noise} in "
+                f"the baseline CSV. mae_by_variant_count stays empty for "
+                f"this noise level."
             )
 
         # These objects are no longer needed in the main process. Workers
@@ -757,6 +814,7 @@ def main():
                     log_length,
                     ibf_params,
                     astar_total_cost,
+                    astar_total_variant_cost,
                 )
                 for repetition in range(repetitions)
             ]

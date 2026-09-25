@@ -40,6 +40,7 @@ If it is to be used, make sure that:
 - `PATH_TO_JAVA` and `PATH_TO_TRIE_RUNNER` at the top of `scripts/ibf_vs_trie_based_comparison.py` are correct
 
 The wrapper expects the class `Runner` to accept the two log paths as arguments and to output lines of the form `Time taken ... <n> milliseconds` and `Overall fitness = <x>`.
+You can find the original trie-based repository [here](https://github.com/DataSystemsGroupUT/ConformanceCheckingUsingTries/). In order to be able to call the trie-based approach as a subprocess, some changes to the Runner class were necessary; you can view them [here](scripts/trieBasedClasses/Runner.java).
 
 ---
 

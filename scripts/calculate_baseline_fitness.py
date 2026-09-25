@@ -7,6 +7,7 @@ def calculate_fitness_by_noise_and_repetition(filepath, output_csv):
         "number_traces": 0,
         "total_length": 0,
         "total_cost": 0,
+        "total_variant_cost": 0,
         "trace_calculation_time": 0.0,
         "shortest_path": None,
         "fitness": 0.0
@@ -16,6 +17,7 @@ def calculate_fitness_by_noise_and_repetition(filepath, output_csv):
         "number_traces": 0,
         "total_length": 0,
         "total_cost": 0,
+        "total_variant_cost": 0,
         "trace_calculation_time": 0.0,
         "shortest_path": None,
         "fitness": 0.0,
@@ -44,6 +46,7 @@ def calculate_fitness_by_noise_and_repetition(filepath, output_csv):
                 g["number_traces"] += variant_count
                 g["total_length"] += trace_length * variant_count
                 g["total_cost"] += cost * variant_count
+                g["total_variant_cost"] += cost
                 g["trace_calculation_time"] += calculation_time_ms
 
                 if g["shortest_path"] is None:
@@ -67,6 +70,7 @@ def calculate_fitness_by_noise_and_repetition(filepath, output_csv):
             g["number_traces"] /= repetition_count
             g["total_length"] /= repetition_count
             g["total_cost"] /= repetition_count
+            g["total_variant_cost"] /= repetition_count
             g["trace_calculation_time"] /= repetition_count
 
         denominator = g["total_length"] + (g["number_traces"] * g["shortest_path"])
@@ -78,6 +82,7 @@ def calculate_fitness_by_noise_and_repetition(filepath, output_csv):
         "number_traces",
         "total_length",
         "total_cost",
+        "total_variant_cost",
         "trace_calculation_time",
         "shortest_path",
         "fitness"
@@ -97,6 +102,7 @@ def calculate_fitness_by_noise_and_repetition(filepath, output_csv):
                 "number_traces": g["number_traces"],
                 "total_length": g["total_length"],
                 "total_cost": g["total_cost"],
+                "total_variant_cost": g["total_variant_cost"],
                 "trace_calculation_time": g["trace_calculation_time"],
                 "shortest_path": g["shortest_path"],
                 "fitness": g["fitness"]
@@ -109,6 +115,7 @@ def calculate_fitness_by_noise_and_repetition(filepath, output_csv):
                 "number_traces": g["number_traces"],
                 "total_length": g["total_length"],
                 "total_cost": g["total_cost"],
+                "total_variant_cost": g["total_variant_cost"],
                 "trace_calculation_time": g["trace_calculation_time"],
                 "shortest_path": g["shortest_path"],
                 "fitness": g["fitness"]
