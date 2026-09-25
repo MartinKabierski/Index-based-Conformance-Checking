@@ -49,18 +49,16 @@ def calculate_fitness_by_noise_and_repetition(filepath, output_csv):
                 if g["shortest_path"] is None:
                     g["shortest_path"] = shortest_path
 
-    # Fitness pro noise + repetition berechnen
+    # calculates fitness per noise + repetition
     for g in groups.values():
         denominator = g["total_length"] + (g["number_traces"] * g["shortest_path"])
         g["fitness"] = 1 - (g["total_cost"] / denominator) if denominator else 0.0
 
-    # Anzahl Repetitions pro Noise bestimmen
     repetitions_by_noise = defaultdict(set)
 
     for noise, repetition in groups.keys():
         repetitions_by_noise[noise].add(repetition)
 
-    # AVG-Zeilen pro Noise berechnen
     for noise, g in noise_totals.items():
         repetition_count = len(repetitions_by_noise[noise])
         g["repetition_count"] = repetition_count

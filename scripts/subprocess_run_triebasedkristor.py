@@ -47,7 +47,7 @@ def run_trie_conformance(
         runner_class: str,
         proxy_log: str,
         sample_log: str,
-        java_bin: str = "/home/jessy/.jdks/temurin-1.8.0_472/bin/java"
+        java_bin: str = "/usr/bin/java"
 ):
     """
     Startet Runner.class mit zwei Log-Dateien,

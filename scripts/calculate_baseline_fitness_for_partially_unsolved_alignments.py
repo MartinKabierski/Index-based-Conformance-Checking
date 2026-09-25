@@ -6,11 +6,12 @@ from collections import defaultdict
 # alignment could be computed (status == "unsolved")?
 #
 #   "worst_case" : cost = trace_length.
-#                  This is the upper bound of the optimal cost,
-#                  because every trace can always be aligned in
-#                  such a way that all events are log moves. Yields
-#                  the lower bound of the fitness. Is guaranteed not
-#                  to overestimate the fitness.
+#                  Treats all events as log moves, but ignores the
+#                  model moves needed to complete the model run.
+#                  The optimal cost lies between 0 and
+#                  trace_length + shortest_path, so this is only an
+#                  estimate, NOT a guaranteed lower bound of the
+#                  fitness (see README).
 #
 #   "best_case"  : cost = 0.
 #                  Lower bound of the cost, upper bound of the
@@ -102,7 +103,7 @@ def aggregate(filepath, unsolved_policy):
                     cost = 0
                 else:
                     raise ValueError(
-                        f"Unbekannte UNSOLVED_POLICY: {unsolved_policy}"
+                        f"Unknown UNSOLVED_POLICY: {unsolved_policy}"
                     )
             else:
                 stats["solved"] += 1
@@ -233,20 +234,21 @@ if __name__ == "__main__":
 
     stats = result["stats"]
 
-    print("--- Abdeckung ---")
-    print(f"Zeilen gesamt:      {stats['rows']}")
-    print(f"Exakt geloest:      {stats['solved']}")
-    print(f"Ungeloest:          {stats['unsolved']}")
-    print(f"Betroffene Traces:  {stats['unsolved_traces']}")
+    print("--- Coverage ---")
+    print(f"Total rows:         {stats['rows']}")
+    print(f"Solved exactly:     {stats['solved']}")
+    print(f"Unsolved:           {stats['unsolved']}")
+    print(f"Affected traces:    {stats['unsolved_traces']}")
 
     if stats["rows"]:
-        anteil = stats["solved"] / stats["rows"]
-        print(f"Variantenabdeckung: {anteil:.4%}")
+        solved_share = stats["solved"] / stats["rows"]
+        print(f"Variant coverage:   {solved_share:.4%}")
 
-    print(f"\nVerwendete Policy:  {UNSOLVED_POLICY}")
+    print(f"\nPolicy used:        {UNSOLVED_POLICY}")
 
-    print("\n--- Fitness je Policy (AVG-Zeilen) ---")
-    print("worst_case = untere Schranke, best_case = obere Schranke.")
+    print("\n--- Fitness per policy (AVG rows) ---")
+    print("best_case = upper bound, "
+          "worst_case = estimate (not a guaranteed lower bound).")
 
     for policy in ("worst_case", "best_case", "exclude"):
         _, totals, _ = aggregate(fitness_filepath, policy)
@@ -257,4 +259,4 @@ if __name__ == "__main__":
                 f"fitness={g['fitness']:.6f}"
             )
 
-    print(f"\nGeschrieben: {output_csv_filename}")
+    print(f"\nWritten: {output_csv_filename}")

@@ -60,7 +60,7 @@ ORIGINAL_LOG_XES = (
 
 ORIGINAL_LOG_TXT = (
         OUTPUT_DIR
-        / f"{LOG_NAME}_original.txt"
+        / f"{LOG_NAME}.txt"
 )
 
 OUTPUT_CSV = (
