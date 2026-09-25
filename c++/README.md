@@ -67,7 +67,7 @@ mv c++/index-basiertes-conformance-checking/build/xes_to_txt scripts/
 | `xes_to_txt` | Converts an event log in XES format to the text format. |
 | `txt_to_xes` | Converts an event log in text format back to XES format. |
 | `remove_double_traces` | Removes duplicate traces from an event log. |
-| `alignment_txt` | Performs index-based conformance checking (alignment) on logs in text format. |
+| [`alignment_txt`](../ARCHITECTURE.md#ibf-alignment-search--alignment_txtcpp) | Performs index-based conformance checking (alignment) on logs in text format. |
 
 
 ### Usage
@@ -79,7 +79,7 @@ This approach allows easier handling of inputs, outputs, and error management wi
 
 See in particular the [helper modules](../ARCHITECTURE.md#helper-modules) , e.g.: `../scripts/subprocess_wrapper.py`
 
-
+The program flow for IBF alignment is described [here](../ARCHITECTURE.md#ibf-alignment-search--alignment_txtcpp).
 
 ##
 #### Third-party libraries used:

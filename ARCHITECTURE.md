@@ -108,7 +108,7 @@ main()
 │   ├── Create result CSV
 │   ├── Convert original log to TXT once (if not present)
 │   ├── Determine IBF parameters (exactly one combination)
-│   ├── Load A* total costs from the baseline CSV (AVG rows)
+│   ├── Load A* total_cost + total_variant_cost from the baseline CSV
 │   └── Determine number of workers
 │
 ├── For each noise value
@@ -137,7 +137,10 @@ main()
                    ├── Measure runtime
                    ├── Count hits with optimal alignment traces
                    ├── IBF: Original Log <-> Playout
-                   ├── MAE = (IBF cost − A* cost) / number of variants
+                   ├── MAE against the A* baseline
+                   │    ├── mae_by_variant_count  (per number of trace variants in the log)
+                   │    └── mae_by_trace_count    (per number of traces in the log)
+                   │
                    └── Return one CSV row
          │
          └── return rows
@@ -146,6 +149,13 @@ main()
          Main process
               └── writerows(rows) to playout_vs_opt_alignments_<LOG>.csv
 ```
+
+Both MAE values (mean alignment error against the A\* baseline) are computed from columns of the result CSV:
+
+- `mae_by_variant_count = (ibf_total_variant_cost - astar_total_variant_cost) / variant_count`
+- `mae_by_trace_count = (ibf_total_cost - astar_total_cost) / ibf_number_traces`
+
+`total_variant_cost` counts the alignment cost once per trace variant, while `total_cost` weights it by the variant frequency. The denominators are the number of trace variants and the number of traces in the original log. The A\* values come from the AVG rows of `fitness_baseline_all_noise_<LOG>.csv`, written by `calculate_baseline_fitness.py` or `calculate_baseline_fitness_for_partially_unsolved_alignments.py`. The two MAEs are computed independently: if an A\* value is missing for a noise level, only the corresponding MAE stays empty and a warning is printed.
 
 ---
 
@@ -271,7 +281,7 @@ Both input files are expected in `DATA_DIR` (default: `output`): the A\* CSV fro
 
 ---
 
-## Helper Modules
+### Helper Modules
 
 - **[`alignment_params_factory.py`](scripts/alignment_params_factory.py)** – generates all IBF parameter combinations from [`params_config.json`](scripts/params_config.json) (see [Alignment Parameters](README.md#alignment-parameters)).
 - **[`subprocess_wrapper.py`](scripts/subprocess_wrapper.py)** – calls `xes_to_txt` and `alignment_txt` as subprocesses and reads the runtimes (Bloom filter creation, search) from the output.
@@ -282,7 +292,83 @@ Both input files are expected in `DATA_DIR` (default: `output`): the A\* CSV fro
 
 ---
 
-## Conventions
+### IBF Alignment Search ([🔗 alignment_txt.cpp](c++/index-basiertes-conformance-checking/source/alignment_txt.cpp))
+
+Inputs/outputs: `--traces` model traces TXT, `--search` log TXT, `--output` result CSV. Both TXT files contain one trace per line with events separated by `" - "`.
+
+Key settings: `--kmer`, `--bucketing` (`omh`, `lsh`, `random`, `tracelen`, `set`, `multiset`, `i`), `--number_buckets_calc` (`n`, `sqrt`), `--sorting` (`score`, `score2`, `hitcount`), `--bucket_limit`, `--shortest_path`, `--num_hashes` (lsh), `--omh_w` and `--omh_seed` (omh), `--seed` (MurmurHash3).
+
+```text
+main()
+│
+├── Parse CLI arguments
+├── Select execution mode
+│   └── NORMAL: --traces + --search + --output
+│       (--dump / --load for IBF serialization are not implemented yet)
+│
+└── search_alignments(...)
+    │
+    ├── Preparation
+    │   ├── Count model traces n (lines in --traces)
+    │   ├── number_buckets = n or sqrt(n)
+    │   └── Create IBF: number_buckets bins, 2048 bits per bin, 2 hash functions
+    │
+    ├── build_interleaved_bloom_filter(...)
+    │   │
+    │   └── for each model trace
+    │        ├── Split into events
+    │        ├── Build unique k-mers (traces shorter than k are padded with "__")
+    │        ├── Assign bucket
+    │        │    ├── omh      -> omh_bucket_index()
+    │        │    ├── lsh      -> get_bucket_index_from_kmers()
+    │        │    ├── random   -> random bucket
+    │        │    ├── tracelen -> bucket = trace length (≥ number_buckets -> bucket 0)
+    │        │    ├── set      -> one bucket per distinct k-mer set
+    │        │    ├── multiset -> one bucket per distinct k-mer multiset
+    │        │    └── i        -> one bucket per trace
+    │        │
+    │        └── Insert the MurmurHash3 hash of every k-mer into the bucket's bin
+    │
+    ├── Print IBF generation time
+    ├── export_bucketlist_to_csv()
+    │   └── ../output/temp/bucketlist_<bucketing>_<num_hashes>_<buckets>_k_<k>.csv
+    │
+    ├── search_in_interleaved_bloom_filter(...)
+    │   │
+    │   └── for each log trace
+    │        │
+    │        ├── Duplicate trace? -> write cached result, next trace
+    │        ├── Split into events, build unique k-mers, hash them
+    │        ├── IBF bulk_count -> k-mer hits per bucket
+    │        ├── Sort buckets by --sorting
+    │        │    ├── score    -> hits / traces in bucket
+    │        │    ├── score2   -> hits / k-mers of the log trace
+    │        │    └── hitcount -> hits
+    │        │
+    │        ├── Initial best match = last model trace (shortest visible trace)
+    │        │
+    │        ├── for bucket in sorted buckets
+    │        │    ├── First non-empty bucket is always checked
+    │        │    ├── Skip if hits < #k-mers − k · best cost (hitcount sorting: stop)
+    │        │    ├── Levenshtein against every trace in the bucket, abort at best cost
+    │        │    ├── Cost 0 -> exact match, stop
+    │        │    └── Stop after --bucket_limit checked buckets (0 = no limit)
+    │        │
+    │        └── Write CSV row
+    │
+    └── Print IBF search time
+```
+
+The Levenshtein distance uses cost 1 for insertions and deletions and cost 2 for substitutions. This equals the alignment cost against the found model trace when log moves and model moves cost 1. Only the model traces in the file are considered, so the result is an upper bound of the optimal alignment cost. A model trace with cost c shares at least #k-mers − k · c k-mers with the log trace, so the hit threshold never skips a bucket that could contain a better match. With `--bucket_limit 0`, bucketing and sorting therefore only affect the runtime, not the costs.
+
+The model trace file must end with the shortest visible model trace, and `--shortest_path` must be its length. This trace is the initial best match for every log trace, with trace length + shortest_path as the cost bound. [`evaluate_playout_quality.py`](scripts/evaluate_playout_quality.py) appends it automatically (`APPEND_SHORTEST_TRACE`).
+
+The result CSV is `;`-separated with the columns `given trace`, `found trace`, `levenshtein distance`, `calculation time [ms]`, `searched buckets` and `compared traces`.
+
+---
+
+
+### Conventions
 
 - **TXT format:** one trace per line, activities separated by ` - `.
 - **Shortest trace:** The IBF tool expects the shortest visible model trace as the **last** trace of the model trace file. The scripts append it and verify this.
