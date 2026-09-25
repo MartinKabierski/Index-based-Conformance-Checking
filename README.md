@@ -21,7 +21,7 @@ First, the models and the baseline are generated; afterwards, the actual experim
 
 ### Required
 
-- Python 3.9+ with `pm4py`, `pandas`, `numpy`, `tqdm`, `matplotlib`...(requirements.txt)
+- Python 3.9+ with `pm4py`, `pandas`, `numpy`, `tqdm`, `matplotlib`...([requirements.txt](requirements.txt)) 
 - The compiled C++ programs `alignment_txt` and `xes_to_txt` are located in the `scripts` folder.
   Read [here](c++/README.md#requirements) how to build them.
 - The event log to be analyzed is located as `.xes` in the `logs` folder
