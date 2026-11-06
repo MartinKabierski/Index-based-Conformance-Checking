@@ -22,18 +22,18 @@ from log_to_log_fani_sani_approach import approximate_alignment as fani_sani_app
 from subprocess_run_triebasedkristor import run_trie_conformance
 from subprocess_wrapper import xes_to_txt
 
-# LOG_NAME = "BPI_Challenge_2012"
-LOG_NAME = "Road_Traffic_Fines_Management_Process"
-NOISE_THRESHOLDS = [0.2]
+LOG_NAME = "BPI_Challenge_2012"
 
-REPETITIONS = 1
+NOISE_THRESHOLDS = [0.8, 0.2]
+
+REPETITIONS = 8
 
 # None:
 # automatically use as many workers as repetitions / available CPUs
-MAX_PARALLEL_REPETITIONS = None
+MAX_PARALLEL_REPETITIONS = 4
 
 # playout params
-TARGET_VARIANTS_LIST = [1000]
+TARGET_VARIANTS_LIST = [1000, 2000, 3000, 4000, 5000]
 PLAYOUT_MODE = "random"
 RANDOM_SEED = 42
 
